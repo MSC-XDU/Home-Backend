@@ -25,11 +25,9 @@ pom.xml.asc
 .lein-plugins/
 .lein-failures
 .nrepl-port
-### Example user template template
-### Example user template
 
 # IntelliJ project files
-.idea
+.idea/
 *.iml
 out
 gen
