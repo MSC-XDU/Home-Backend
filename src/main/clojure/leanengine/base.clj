@@ -29,7 +29,7 @@
   []
   (.getTime (Date.)))
 
-(defn- digest
+(defn digest
   [type ^String str]
   (let [bytes (.getBytes str)
         md (MessageDigest/getInstance type)]
@@ -49,5 +49,4 @@
         (str sign "," now ",master"))
       (let [now (now)
             sign (md5 (str now (System/getenv "LEANCLOUD_APP_KEY")))]
-        (str sign "," now))))
-  )
+        (str sign "," now)))))

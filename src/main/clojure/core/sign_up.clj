@@ -29,7 +29,8 @@
                                 :as           :json
                                 :content-type :json
                                 :accept       :json
-                                :query-params {"where" (write-str {:username username})}})
+                                :query-params {"where" (write-str {:username username})
+                                               "limit" 1}})
                    (:body)
                    (:results)
                    (#(or (empty? %) (nil? %)))
@@ -40,18 +41,17 @@
 (defn sign-up
   [^String e-mail ^String password]
   (wrap-try
-    (doto (AVUser.)
-      (.setUsername e-mail)
-      (.setEmail e-mail)
-      (.setPassword password)
-      (.signUp))
-    {:success? true}))
+    (let [token (.getSessionToken (doto (AVUser.)
+                                    (.setUsername e-mail)
+                                    (.setEmail e-mail)
+                                    (.setPassword password)
+                                    (.signUp)))]
+      {:success? true :token token})))
 
 (defn log-in
   [^String e-mail ^String password]
   (wrap-try
-    (AVUser/logIn e-mail password)
-    {:success? true}))
+    {:success? true :token (.getSessionToken (AVUser/logIn e-mail password))}))
 
 (defn set-phone
   [^String phone]
@@ -76,24 +76,23 @@
     {:success? true}))
 
 (defn set-base-info
-  [info]
+  [info ^AVUser user]
   (wrap-try
-    (let [phone (info "phone")
-          info (dissoc info "phone")]
-      (-> (AVUser/getCurrentUser)
+    (let [phone (info :phone)
+          info (dissoc info :phone)]
+      (-> user
           (put-object info)
           (save-object))
       (set-phone phone)
       {:success? true})))
 
 (defn set-sign-up-info
-  [info]
+  [info ^AVUser user]
   (wrap-try
-    (let [user (AVUser/getCurrentUser)
-          forms (-> (avos-query "SignUp")
-                    (query-object ["user" := user])
-                    (query-find))]
-      (if-let [form (first forms)]
+    (let [form (-> (avos-query "SignUp")
+                   (query-object ["user" := user])
+                   (query-first))]
+      (if-not (nil? form)
         (do
           (-> (put-object form info)
               (save-object))
@@ -103,50 +102,45 @@
               (put-object info)
               (put-object ["user" user])
               (save-object))
-          {:success? true})))))
+          {:success? true :files []})))))
 
 (defn get-sign-up-info
-  []
+  [^AVUser user]
   (wrap-try
     (try
-      (let [user (AVUser/getCurrentUser)
-            info (-> (avos-query "SignUp")
-                     (query-object ["user" := user])
-                     (query-include "files")
-                     (query-first))
+      (let [info ^AVObject (-> (avos-query "SignUp")
+                               (query-object ["user" := user])
+                               (query-include "files")
+                               (query-first))
             files (:files (get-slot info ["files" :seq]))
             files (map (fn [file] {:name    (file "originalName")
                                    :url     (file "url")
                                    :id      (file "objectId")
                                    :loading false}) files)]
-        (-> info
-            (.toJSONObject)
+        (-> (.toJSONObject info)
             (.toString)
             (read-str)
             (assoc "files" files)
             (assoc "success?" true)
             (dissoc "className" "createdAt" "objectId" "updatedAt" "user")))
       (catch NullPointerException e
-        {}))))
+        {:success? true}))))
 
 (defn get-base-info
-  []
+  [^AVUser user]
   (wrap-try
-    (if-let [user (AVUser/getCurrentUser)]
-      (-> (.fetch user)
-          (.toJSONObject)
-          (.toString)
-          (read-str)
-          (dissoc "className" "emailVerified" "createdAt" "sessionToken" "objectId" "email" "username" "updatedAt" "webpointer")
-          (assoc "success?" true))
-      {:success? false})))
+    (-> user
+        (.toJSONObject)
+        (.toString)
+        (read-str)
+        (dissoc "className" "emailVerified" "createdAt" "sessionToken" "objectId" "email" "username" "updatedAt" "webpointer")
+        (assoc "success?" true))))
 
 (defn save-file
-  [file]
+  [file ^AVUser user]
   (wrap-try
     (let [name (:filename file)
           file ^AVFile (save-file-bytes name (:bytes file))
-          user (AVUser/getCurrentUser)
           info (-> (avos-query "SignUp")
                    (query-object ["user" := user])
                    (query-first))
@@ -162,13 +156,13 @@
        :url      (.getUrl file)})))
 
 (defn delete-file
-  [^String id]
+  [^String id ^AVUser user]
   (wrap-try
-    (let [user ^AVObject (-> (avos-query "SignUp")
-                             (query-object ["user" := (AVUser/getCurrentUser)])
-                             (query-first))
-          file ^AVFile (-> (avos-query "_File")
-                           (.get id))]
+    (let [file ^AVFile (-> (avos-query "_File")
+                           (.get id))
+          user (-> (avos-query "SignUp")
+                   (query-object ["user" := user])
+                   (query-first))]
       (.removeAll user "files" [file])
       (save-object user)
       {:success? true})))

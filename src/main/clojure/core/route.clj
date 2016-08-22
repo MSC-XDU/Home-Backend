@@ -16,8 +16,11 @@
 (defn- wrap-check-login
   [handler]
   (fn [request]
-    (if-let [user (AVUser/getCurrentUser)]
-      (handler request)
+    (if-let [token (get (:params request) :token (get (:params request) "token"))]
+      (if-let [user (AVUser/becomeWithSessionToken token)]
+        (handler (assoc-in request [:params :user] user))
+        (-> (response "error")
+            (status 401)))
       (-> (response "error")
           (status 401)))))
 
@@ -54,20 +57,19 @@
 
     (-> (POST "/request-verify" [phone]
           (response (request-phone-verify phone)))
-        (wrap-routes (comp wrap-check-login
-                           wrap-json-params-routes)))
+        (wrap-routes (comp wrap-json-params-routes)))
 
-    (-> (POST "/set-base-info" [:as {body :body}]
-          (response (set-base-info body)))
-        (wrap-routes (comp wrap-check-login
-                           wrap-json-body-routes)))
+    (-> (POST "/set-base-info" [user data]
+          (response (set-base-info data user)))
+        (wrap-routes (comp wrap-json-params-routes
+                           wrap-check-login)))
 
-    (-> (POST "/set-sign-up-info" [:as {body :body}]
-          (response (set-sign-up-info body)))
-        (wrap-routes (comp wrap-check-login
-                           wrap-json-body-routes)))
+    (-> (POST "/set-sign-up-info" [user data]
+          (response (set-sign-up-info data user)))
+        (wrap-routes (comp wrap-json-params-routes
+                           wrap-check-login)))
 
-    (-> (POST "/user-exist" [email :as req]
+    (-> (POST "/user-exist" [email]
           (response (user-exist? email)))
         (wrap-routes wrap-json-params-routes))
 
@@ -75,25 +77,27 @@
           (response (log-in email password)))
         (wrap-routes wrap-json-params-routes))
 
-    (-> (GET "/sign-up-info" []
-          (response (get-sign-up-info)))
-        (wrap-routes (comp wrap-check-login
-                           wrap-json-response)))
+    (-> (POST "/sign-up-info" [user]
+          (response (get-sign-up-info user)))
+        (wrap-routes (comp wrap-json-params-routes
+                           wrap-check-login)))
 
-    (-> (GET "/base-info" []
-          (response (get-base-info)))
-        (wrap-routes (comp wrap-check-login
-                           wrap-json-response)))
+    (-> (POST "/base-info" [user]
+          (response (get-base-info user)))
+        (wrap-routes (comp wrap-json-params-routes
+                           wrap-check-login)))
 
-    (-> (POST "/file" [file :as r]
-          (response (save-file file)))
-        (wrap-routes (comp wrap-check-login
-                           wrap-json-response
-                           #(wrap-multipart-params % {:store (byte-array-store)}))))
+    (-> (POST "/file" [file user :as req]
+          (info req)
+          (response (save-file file user)))
+        (wrap-routes (comp wrap-json-response
+                           #(wrap-multipart-params % {:store (byte-array-store)})
+                           wrap-check-login)))
 
-    (-> (POST "/delete-file" [id]
-          (response (delete-file id)))
-        (wrap-routes wrap-json-params-routes))
+    (-> (POST "/delete-file" [id user]
+          (response (delete-file id user)))
+        (wrap-routes (comp wrap-json-params-routes
+                           wrap-check-login)))
 
     (OPTIONS "*" []
       (response ""))))
@@ -101,4 +105,7 @@
 (def sign-up-routes
   (wrap-cors sign-up-routes* allowed-origin allowed-method allowed-header))
 
-(defservice sign-up-routes)
+(defservice (routes
+              sign-up-routes
+              (ANY "*" [] (-> (response "notfound")
+                              (status 404)))))
