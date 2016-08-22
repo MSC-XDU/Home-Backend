@@ -88,7 +88,6 @@
                            wrap-check-login)))
 
     (-> (POST "/file" [file user :as req]
-          (info req)
           (response (save-file file user)))
         (wrap-routes (comp wrap-json-response
                            #(wrap-multipart-params % {:store (byte-array-store)})
