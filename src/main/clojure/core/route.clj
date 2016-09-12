@@ -105,6 +105,5 @@
   (wrap-cors sign-up-routes* allowed-origin allowed-method allowed-header))
 
 (defservice (routes
-              sign-up-routes
               (ANY "*" [] (-> (response "notfound")
                               (status 404)))))
