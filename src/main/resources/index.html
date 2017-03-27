@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>CaffèHub 报名</title>
+    <link rel="stylesheet"
+          href="https://cdn.bootcss.com/bootstrap/3.3.7/css/bootstrap.min.css"
+          integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+          crossorigin="anonymous">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1">
+    <style>
+        html, body {
+            height: 100%;
+        }
+
+        .container {
+            height: 100%;
+            padding-top: 15vh;
+        }
+
+        .submit {
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+        }
+
+        .retry {
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+        }
+
+        .row {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-xs-1 col-md-4"></div>
+        <div class="col-xs-10 col-md-4">
+            <h1 style="text-align: center">CaffèHub 报名</h1>
+        </div>
+        <div class="col-xs-1 col-md-4"></div>
+    </div>
+    <div class="row">
+        <div class="col-xs-1 col-md-4"></div>
+        <div class="col-xs-10 col-md-4">
+            <form id="phase-1">
+                <div class="form-group">
+                    <label for="id">学号</label>
+                    <input type="number" class="form-control" id="id"
+                           placeholder="学号">
+                </div>
+                <div class="form-group">
+                    <label for="name">姓名</label>
+                    <input type="text" class="form-control" id="name"
+                           placeholder="姓名">
+                </div>
+                <div class="form-group">
+                    <label for="phone">手机号码</label>
+                    <input type="tel" id="phone" placeholder="手机号码"
+                           class="form-control">
+                </div>
+                <button type="button" class="btn btn-default submit">提交</button>
+            </form>
+            <form id="phase-2" style="display: none">
+                <div class="form-group">
+                    <label for="code">短信验证码</label>
+                    <input type="text" id="code" placeholder="短信验证码"
+                           class="form-control">
+                    <button type="button" class="btn btn-default retry">新验证码
+                    </button>
+                </div>
+                <button type="button" class="btn btn-default submit">提交</button>
+            </form>
+        </div>
+        <div class="col-xs-1 col-md-4"></div>
+    </div>
+</div>
+<script>
+    (function () {
+        function getForm() {
+            return {
+                id: document.getElementById("id").value,
+                name: document.getElementById("name").value,
+                phone: document.getElementById("phone").value
+            }
+        }
+
+        var phone;
+
+        document.querySelector("#phase-1 .submit").addEventListener("click", function (e) {
+            var data = getForm();
+
+            for (var k in data) {
+                if (data.hasOwnProperty(k) && !data[k]) {
+                    alert("有非法字段");
+                    return;
+                }
+            }
+
+            document.querySelector("#phase-1 .submit").textContent = "加载中";
+
+            var http = new XMLHttpRequest();
+
+            http.addEventListener("load", function () {
+                if (http.status >= 200 && http.status < 300) {
+                    var resp = JSON.parse(http.responseText);
+                    console.log(resp);
+                    if (resp["success?"]) {
+                        if (resp["exist?"]) {
+                            alert(data.id + " 已经注册了");
+                            document.querySelector("#phase-1 .submit").textContent = "提交";
+                        } else {
+                            document.getElementById("phase-1").style.display = "none";
+                            document.getElementById("phase-2").style.display = "block";
+                            phone = data.phone;
+                        }
+                        return
+                    }
+                }
+                document.querySelector("#phase-1 .submit").textContent = "重试";
+            }, false);
+
+            http.open("post", "/sign-up");
+            http.setRequestHeader("Content-Type", "application/json");
+            http.send(JSON.stringify(data));
+        });
+
+        document.querySelector("#phase-2 .submit").addEventListener("click", function () {
+            var data = {code: document.getElementById("code").value};
+            var http = new XMLHttpRequest();
+
+            http.addEventListener("load", function () {
+                if (http.status >= 200 && http.status < 300) {
+                    var resp = JSON.parse(http.responseText);
+                    console.log(resp);
+                    if (resp["success?"]) {
+                        document.getElementById("phase-2").style.display = "none";
+                        document.getElementById("phase-1").style.display = "block";
+                        alert("登记成功");
+                        return
+                    }
+                }
+                document.querySelector("#phase-2 .submit").textContent = "重试";
+            }, false);
+
+            http.open("post", "/verify-phone");
+            http.setRequestHeader("Content-Type", "application/json");
+            http.send(JSON.stringify(data));
+        });
+
+        document.querySelector("#phase-2 .retry").addEventListener("click", function () {
+            var data = {phone: phone};
+            var http = new XMLHttpRequest();
+
+            http.addEventListener("load", function () {
+                if (http.status >= 200 && http.status < 300) {
+                    var resp = JSON.parse(http.responseText);
+                    console.log(resp);
+                    if (!resp["success?"]) {
+                        alert(resp["error"]);
+                    }
+                    return
+                }
+                alert("请求失败，稍后重试")
+            }, false);
+
+            http.open("post", "/request-phone-verify");
+            http.setRequestHeader("Content-Type", "application/json");
+            http.send(JSON.stringify(data));
+        });
+    })()
+</script>
+</body>
+</html>
